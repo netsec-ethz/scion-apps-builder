@@ -18,7 +18,22 @@ all-deb-amd64:
   variables:
     CI_TARGET_ARCHITECTURE: amd64
   script:
-    - echo "1"
+    # Prepare operating system
+    - echo "Acquire::By-Hash \"yes\"; " > /etc/apt/apt.conf.d/01byhash
+    - apt update && apt install -y apt-transport-https
+    - cp debian/apt.sources.list /etc/apt/sources.list
+    - rm -rf /var/lib/apt/lists/* && apt update && apt install -y git wget unzip
+    - curl -fSL "https://dl.google.com/go/go1.9.7.linux-amd64.tar.gz" | tar xzC /usr/local
+    - ln -f -s /usr/local/go/bin/* /usr/bin/
+    # Clone SCION apps source code
+    - git clone $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
+    - mkdir -p $HOME/go/src/github.com/netsec-ethz/
+    - ln -s scion-apps $HOME/go/src/github.com/netsec-ethz/
+#    # Install selected release of BAZEL
+#    - wget $CI_BAZEL_URL -O bazel_install_script.sh
+#    - bash bazel_install_script.sh
+    # Debug
+    - go env
   artifacts:
     paths:
       - output-amd64/
