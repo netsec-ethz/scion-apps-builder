@@ -29,11 +29,20 @@ all-deb-amd64:
     - git clone $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
     - mkdir -p $HOME/go/src/github.com/netsec-ethz/
     - ln -s scion-apps $HOME/go/src/github.com/netsec-ethz/
+    # Install mockgen
+    - go get -d github.com/golang/mock/mockgen
+    - pushd $HOME/go/src/github.com/golang/mock/mockgen
+    - git checkout 73dc87cad333b55a02058f4b3d872dbbafddc2b0
+    - go get .
+    - go install .
+    - popd
 #    # Install selected release of BAZEL
 #    - wget $CI_BAZEL_URL -O bazel_install_script.sh
 #    - bash bazel_install_script.sh
     # Debug
     - go env
+    - cd scion-apps/bwtester/bwtestserver
+    - go build
   artifacts:
     paths:
       - output-amd64/
