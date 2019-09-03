@@ -26,27 +26,31 @@ all-deb-amd64:
     - curl -fSL "https://dl.google.com/go/go$CI_GOLANG_VERSION.linux-amd64.tar.gz" | tar xzC /usr/local
     - ln -f -s /usr/local/go/bin/* /usr/bin/
     # Clone SCION apps source code
+    - cd $HOME
     - git clone $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
     - mkdir -p $HOME/go/src/github.com/netsec-ethz/
-    - ln -s scion-apps $HOME/go/src/github.com/netsec-ethz/
+    - ln -s /root/scion-apps /root/go/src/github.com/netsec-ethz/
     # Install mockgen
     - go get -d github.com/golang/mock/mockgen
-    - pushd $HOME/go/src/github.com/golang/mock/mockgen
+    - cd $HOME/go/src/github.com/golang/mock/mockgen
     - git checkout 73dc87cad333b55a02058f4b3d872dbbafddc2b0
     - go get .
     - go install .
-    - popd
     # Install SCION apps deps
-    - pushd $HOME/go/src/github.com/netsec-ethz/scion-apps
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
     - apt install -y govendor
-    - ./deps.sh
+    - apt install -y capnproto libpam0g-dev
+    - govendor sync -v
+#    - pushd vendor/zombiezen.com/go/capnproto2/capnpc-go && go install -v && popd
+#    - cp vendor/zombiezen.com/go/capnproto2/std/go.capnp vendor/github.com/scionproto/scion/proto/go.capnp
+    # Install selected release of BAZEL
+    - pushd /tmp
+    - wget https://github.com/bazelbuild/bazel/releases/download/$CI_BAZEL_VERSION/bazel-$CI_BAZEL_VERSION-installer-linux-x86_64.sh -O bazel_install_script.sh
+    - bash bazel_install_script.sh
     - popd
-#    # Install selected release of BAZEL
-#    - wget $CI_BAZEL_URL -O bazel_install_script.sh
-#    - bash bazel_install_script.sh
     # Debug
     - go env
-    - cd scion-apps/bwtester/bwtestserver
+    - cd bwtester/bwtestserver
     - go build
   artifacts:
     paths:
