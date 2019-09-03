@@ -1,0 +1,25 @@
+stages:
+  - pre-build
+  - build
+  - test
+  - deploy
+  - post-deploy
+
+connectivity-check:
+  stage: pre-build
+  image: busybox
+  script:
+    - ping github.com -c1
+    - nc -vz packages.netsec.inf.ethz.ch 22
+
+all-deb-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+  script:
+    - echo "1"
+  artifacts:
+    paths:
+      - output-amd64/
+    expire_in: 1 hour
