@@ -15,6 +15,7 @@ CI process relies on some variables defined below. They can be configured using 
 
 * `CI_DOCKER_IMAGE`
 * `CI_BAZEL_URL`
+* `CI_GOLANG_VERSION`
 
 ### DEB repository configuration
 
