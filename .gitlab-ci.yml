@@ -38,6 +38,7 @@ all-deb-amd64:
     - popd
     # Install SCION apps deps
     - pushd scion-apps
+    - apt install -y govendor
     - ./deps.sh
     - popd
 #    # Install selected release of BAZEL
