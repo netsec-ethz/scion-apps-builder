@@ -36,6 +36,10 @@ all-deb-amd64:
     - go get .
     - go install .
     - popd
+    # Install SCION apps deps
+    - pushd scion-apps
+    - ./deps.sh
+    - popd
 #    # Install selected release of BAZEL
 #    - wget $CI_BAZEL_URL -O bazel_install_script.sh
 #    - bash bazel_install_script.sh
