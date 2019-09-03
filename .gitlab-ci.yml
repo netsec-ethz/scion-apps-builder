@@ -30,6 +30,8 @@ all-deb-amd64:
     - git clone $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
     - mkdir -p $HOME/go/src/github.com/netsec-ethz/
     - ln -s /root/scion-apps /root/go/src/github.com/netsec-ethz/
+    # Override some files from upstream SCION apps
+    - pushd scion-apps && for i in ../patches/*.patch; do git apply $i --verbose; done && popd
     # Install mockgen
     - go get -d github.com/golang/mock/mockgen
     - cd $HOME/go/src/github.com/golang/mock/mockgen
