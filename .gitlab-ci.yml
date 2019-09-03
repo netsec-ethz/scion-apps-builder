@@ -17,43 +17,45 @@ all-deb-amd64:
   image: $CI_DOCKER_IMAGE
   variables:
     CI_TARGET_ARCHITECTURE: amd64
+    CI_APPS: "bwtester/bwtestserver bwtester/bwtestclient"
   script:
     # Prepare operating system
     - echo "Acquire::By-Hash \"yes\"; " > /etc/apt/apt.conf.d/01byhash
-    - apt update && apt install -y apt-transport-https
+    - apt update && apt install -y apt-transport-https ca-certificates
     - cp debian/apt.sources.list /etc/apt/sources.list
-    - rm -rf /var/lib/apt/lists/* && apt update && apt install -y git wget curl unzip
+    - rm -rf /var/lib/apt/lists/* && apt update && apt install -y git wget curl unzip gcc
     - curl -fSL "https://dl.google.com/go/go$CI_GOLANG_VERSION.linux-amd64.tar.gz" | tar xzC /usr/local
     - ln -f -s /usr/local/go/bin/* /usr/bin/
     # Clone SCION apps source code
-    - cd $HOME
     - git clone $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
     - mkdir -p $HOME/go/src/github.com/netsec-ethz/
-    - ln -s /root/scion-apps /root/go/src/github.com/netsec-ethz/
+    - ln -s $(pwd)/scion-apps /root/go/src/github.com/netsec-ethz/
     # Override some files from upstream SCION apps
     - pushd scion-apps && for i in ../patches/*.patch; do git apply $i --verbose; done && popd
-    # Install mockgen
-    - go get -d github.com/golang/mock/mockgen
-    - cd $HOME/go/src/github.com/golang/mock/mockgen
-    - git checkout 73dc87cad333b55a02058f4b3d872dbbafddc2b0
-    - go get .
-    - go install .
-    # Install SCION apps deps
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
-    - apt install -y govendor
-    - apt install -y capnproto libpam0g-dev
-    - govendor sync -v
-#    - pushd vendor/zombiezen.com/go/capnproto2/capnpc-go && go install -v && popd
-#    - cp vendor/zombiezen.com/go/capnproto2/std/go.capnp vendor/github.com/scionproto/scion/proto/go.capnp
+    # Clone SCION source code
+    - git clone $CI_SCION_REPO -b $CI_SCION_BRANCH scion
+    - mkdir -p $HOME/go/src/github.com/scionproto/
+    - ln -s $(pwd)/scion /root/go/src/github.com/scionproto/
     # Install selected release of BAZEL
-    - pushd /tmp
     - wget https://github.com/bazelbuild/bazel/releases/download/$CI_BAZEL_VERSION/bazel-$CI_BAZEL_VERSION-installer-linux-x86_64.sh -O bazel_install_script.sh
     - bash bazel_install_script.sh
-    - popd
-    # Debug
-    - go env
-    - cd bwtester/bwtestserver
-    - go build
+#    # Install mockgen
+#    - go get -d github.com/golang/mock/mockgen
+#    - cd $HOME/go/src/github.com/golang/mock/mockgen
+#    - git checkout 73dc87cad333b55a02058f4b3d872dbbafddc2b0
+#    - go get . && go install .
+    # Install SCION dependencies
+    - cd $HOME/go/src/github.com/scionproto/scion
+    - bazel fetch //:scion
+    - wget https://github.com/kormat/bzlcompat/releases/download/v0.6/bzlcompat-v0.6-linux-x86_64 -O /usr/bin/bzlcompat && chmod +x /usr/bin/bzlcompat
+    - bzlcompat -vendorBase=go
+    # Install SCION apps deps
+    - apt install -y govendor capnproto libpam0g-dev
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
+    - govendor sync -v
+    - rm -r vendor/github.com/scionproto
+    # Build required apps
+    - for CI_APP in $CI_APPS; do pushd $CI_APP && go build && popd; done
   artifacts:
     paths:
       - output-amd64/
