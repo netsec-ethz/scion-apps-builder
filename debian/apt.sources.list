@@ -1,0 +1,11 @@
+deb [arch=amd64,i386] https://mirror.init7.net/ubuntu/ bionic main restricted universe multiverse
+deb [arch=armhf,arm64] http://ports.ubuntu.com/ bionic main restricted universe multiverse
+
+deb [arch=amd64,i386] https://mirror.init7.net/ubuntu/ bionic-updates main restricted universe multiverse
+deb [arch=armhf,arm64] http://ports.ubuntu.com/ bionic-updates main restricted universe multiverse
+
+deb [arch=amd64,i386] https://mirror.init7.net/ubuntu/ bionic-backports main restricted universe multiverse
+deb [arch=armhf,arm64] http://ports.ubuntu.com/ bionic-backports main restricted universe multiverse
+
+deb [arch=amd64,i386] http://security.ubuntu.com/ubuntu bionic-security main restricted universe multiverse
+deb [arch=armhf,arm64] http://ports.ubuntu.com/ bionic-security main restricted universe multiverse
