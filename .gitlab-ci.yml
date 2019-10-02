@@ -1,7 +1,6 @@
 stages:
   - pre-build
   - build
-  - package
   - test
   - deploy
   - post-deploy
@@ -86,7 +85,7 @@ bwtester-amd64:
   artifacts:
     paths:
       - output-amd64/
-    expire_in: 5 minutes
+    expire_in: 30 minutes
 
 camerapp-amd64:
   stage: build
@@ -107,7 +106,7 @@ camerapp-amd64:
   artifacts:
     paths:
       - output-amd64/
-    expire_in: 5 minutes
+    expire_in: 30 minutes
 
 helloworld-amd64:
   stage: build
@@ -125,7 +124,7 @@ helloworld-amd64:
   artifacts:
     paths:
       - output-amd64/
-    expire_in: 5 minutes
+    expire_in: 30 minutes
 
 netcat-amd64:
   stage: build
@@ -143,7 +142,7 @@ netcat-amd64:
   artifacts:
     paths:
       - output-amd64/
-    expire_in: 5 minutes
+    expire_in: 30 minutes
 
 sensorapp-amd64:
   stage: build
@@ -165,7 +164,7 @@ sensorapp-amd64:
   artifacts:
     paths:
       - output-amd64/
-    expire_in: 5 minutes
+    expire_in: 30 minutes
 
 ssh-amd64:
   stage: build
@@ -185,7 +184,7 @@ ssh-amd64:
   artifacts:
     paths:
       - output-amd64/
-    expire_in: 5 minutes
+    expire_in: 30 minutes
 
 webapp-amd64:
   stage: build
@@ -203,18 +202,38 @@ webapp-amd64:
   artifacts:
     paths:
       - output-amd64/
-    expire_in: 5 minutes
+    expire_in: 30 minutes
 
-#apps-deb-arm64:
-#  stage: package
-#  image: $CI_DOCKER_IMAGE
-#  variables:
-#    CI_TARGET_ARCHITECTURE: arm64
-#  <<: *build-deb-script
-#  artifacts:
-#    paths:
-#      - output-arm64/
-#    expire_in: 5 minutes
+all-ubuntu-16.04-amd64-test:
+  stage: test
+  image: ubuntu:16.04
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+  script:
+    - ls -l output-$CI_TARGET_ARCHITECTURE/
+
+.deb-deploy-script: &deb-deploy-script
+  before_script:
+    - 'which ssh-agent || ( apt update && apt-get install -qq openssh-client )'
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$CI_SSH_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+    - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
+    - ssh -q $CI_SCP_TARGET "rm -f /tmp/*.deb"
+  script:
+    - scp -v output-$CI_DEB_PLATFORM/*.deb $CI_SCP_TARGET:/tmp
+    - export files=$(ssh -q $CI_SCP_TARGET "cd /tmp && ls /tmp/*.deb") && echo $files
+    - for deb in $files; do ssh -q $CI_SCP_TARGET "reprepro -b /home/reprepro/reprepro includedeb $CI_DEB_CODENAME $deb || true"; done
+
+all-deb-deploy:
+  stage: deploy
+  image: $CI_DOCKER_IMAGE
+  only:
+    - master
+  variables:
+    CI_DEB_CODENAME: all
+    CI_DEB_PLATFORM: "*"
+  <<: *deb-deploy-script
 
 #.test-deb-script: &test-deb-script
 #  script:
