@@ -1,6 +1,7 @@
 stages:
   - pre-build
   - build
+  - package
   - test
   - deploy
   - post-deploy
@@ -12,18 +13,14 @@ connectivity-check:
     - ping github.com -c1
     - nc -vz packages.netsec.inf.ethz.ch 22
 
-all-deb-amd64:
-  stage: build
-  image: $CI_DOCKER_IMAGE
-  variables:
-    CI_TARGET_ARCHITECTURE: amd64
-    CI_APPS: "bwtester/bwtestserver bwtester/bwtestclient"
-  script:
+.build-script: &build-script
+  before_script:
     # Prepare operating system
+    - date
     - echo "Acquire::By-Hash \"yes\"; " > /etc/apt/apt.conf.d/01byhash
     - apt update && apt install -y apt-transport-https ca-certificates
     - cp debian/apt.sources.list /etc/apt/sources.list
-    - rm -rf /var/lib/apt/lists/* && apt update && apt install -y git wget curl unzip gcc
+    - rm -rf /var/lib/apt/lists/* && apt update && apt install -y git wget curl unzip gcc file python
     - curl -fSL "https://dl.google.com/go/go$CI_GOLANG_VERSION.linux-amd64.tar.gz" | tar xzC /usr/local
     - ln -f -s /usr/local/go/bin/* /usr/bin/
     # Clone SCION apps source code
@@ -31,32 +28,205 @@ all-deb-amd64:
     - mkdir -p $HOME/go/src/github.com/netsec-ethz/
     - ln -s $(pwd)/scion-apps /root/go/src/github.com/netsec-ethz/
     # Override some files from upstream SCION apps
-    - pushd scion-apps && for i in ../patches/*.patch; do git apply $i --verbose; done && popd
-    # Clone SCION source code
-    - git clone $CI_SCION_REPO -b $CI_SCION_BRANCH scion
-    - mkdir -p $HOME/go/src/github.com/scionproto/
-    - ln -s $(pwd)/scion /root/go/src/github.com/scionproto/
+    - pushd scion-apps
+    - if [ ! -z "$(ls ../patches)" ]; then ls -l ../patches; for i in ../patches/*.patch; do git apply $i --verbose; done; fi
+    - popd
     # Install selected release of BAZEL
     - wget https://github.com/bazelbuild/bazel/releases/download/$CI_BAZEL_VERSION/bazel-$CI_BAZEL_VERSION-installer-linux-x86_64.sh -O bazel_install_script.sh
     - bash bazel_install_script.sh
-#    # Install mockgen
-#    - go get -d github.com/golang/mock/mockgen
-#    - cd $HOME/go/src/github.com/golang/mock/mockgen
-#    - git checkout 73dc87cad333b55a02058f4b3d872dbbafddc2b0
-#    - go get . && go install .
-    # Install SCION dependencies
-    - cd $HOME/go/src/github.com/scionproto/scion
-    - bazel fetch //:scion
-    - wget https://github.com/kormat/bzlcompat/releases/download/v0.6/bzlcompat-v0.6-linux-x86_64 -O /usr/bin/bzlcompat && chmod +x /usr/bin/bzlcompat
-    - bzlcompat -vendorBase=go
     # Install SCION apps deps
     - apt install -y govendor capnproto libpam0g-dev
     - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
     - govendor sync -v
-    - rm -r vendor/github.com/scionproto
-    # Build required apps
-    - for CI_APP in $CI_APPS; do pushd $CI_APP && go build && popd; done
+    # Place hash of git repo in the output for auditing
+    - export CGO_ENABLED=1
+    - export GOOS=linux
+    - export CC=$CI_CC && echo $CC
+    - export GOARCH=$CI_GOARCH && echo $GOARCH
+
+.post-build-script: &post-build-script
+  after_script:
+    # Set variables in BUILD.bazel
+    - source ./RELEASE
+    - sed -i "s/CI_TARGET_ARCHITECTURE/$CI_TARGET_ARCHITECTURE/g" BUILD.bazel
+    - sed -i "s/CI_PKG_VERSION_BWTESTER/$PKG_VERSION_BWTESTER/g" BUILD.bazel
+    - sed -i "s/CI_PKG_VERSION_CAMERAPP/$PKG_VERSION_CAMERAPP/g" BUILD.bazel
+    - sed -i "s/CI_PKG_VERSION_HELLOWORLD/$PKG_VERSION_HELLOWORLD/g" BUILD.bazel
+    - sed -i "s/CI_PKG_VERSION_NETCAT/$PKG_VERSION_NETCAT/g" BUILD.bazel
+    - sed -i "s/CI_PKG_VERSION_SENSORAPP/$PKG_VERSION_SENSORAPP/g" BUILD.bazel
+    - sed -i "s/CI_PKG_VERSION_SSH/$PKG_VERSION_SSH/g" BUILD.bazel
+    - sed -i "s/CI_PKG_VERSION_WEBAPP/$PKG_VERSION_WEBAPP/g" BUILD.bazel
+    # Prepare BIN directory for Bazel
+    - mv bin-$CI_TARGET_ARCHITECTURE bin
+    # Build APP package
+    - bazel build //:scion-apps-$CI_APP_LOCATION
+    # Prepare packages to shipment
+    - mkdir output-$CI_TARGET_ARCHITECTURE
+    - cp bazel-bin/*_$CI_TARGET_ARCHITECTURE.deb output-$CI_TARGET_ARCHITECTURE
+    # Debug
+    - ls -lh output-$CI_TARGET_ARCHITECTURE
+    # Place hash of git repo in the output for auditing
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps && git log -1
+
+bwtester-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+    CI_APP_LOCATION: bwtester
+  <<: *build-script
+  script:
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
+    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../bwtestclient/
+    - mv bwtestclient $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestclient
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../bwtestserver/
+    - mv bwtestserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestserver
+  <<: *post-build-script
   artifacts:
     paths:
       - output-amd64/
-    expire_in: 1 hour
+    expire_in: 5 minutes
+
+camerapp-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+    CI_APP_LOCATION: camerapp
+  <<: *build-script
+  script:
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
+    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../imagefetcher/
+    - mv imagefetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imagefetcher
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../imageserver/
+    - mv imageserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imageserver
+    - cp ../imageserver/paparazzi.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-paparazzi
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-amd64/
+    expire_in: 5 minutes
+
+helloworld-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+    CI_APP_LOCATION: helloworld
+  <<: *build-script
+  script:
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
+    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../
+    - mv helloworld $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-helloworld
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-amd64/
+    expire_in: 5 minutes
+
+netcat-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+    CI_APP_LOCATION: netcat
+  <<: *build-script
+  script:
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
+    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../
+    - mv netcat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-netcat
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-amd64/
+    expire_in: 5 minutes
+
+sensorapp-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+    CI_APP_LOCATION: sensorapp
+  <<: *build-script
+  script:
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
+    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../sensorfetcher/
+    - mv sensorfetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorfetcher
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../sensorserver/
+    - mv sensorserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorserver
+    - cp ../sensorserver/sensorreader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorreader
+    - cp ../sensorserver/timereader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-timereader
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-amd64/
+    expire_in: 5 minutes
+
+ssh-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+    CI_APP_LOCATION: ssh
+  <<: *build-script
+  script:
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
+    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../client/
+    - mv client $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-client
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../server/
+    - mv server $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-server
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-amd64/
+    expire_in: 5 minutes
+
+webapp-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+    CI_APP_LOCATION: webapp
+  <<: *build-script
+  script:
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
+    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
+    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../
+    - mv webapp $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-webapp
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-amd64/
+    expire_in: 5 minutes
+
+#apps-deb-arm64:
+#  stage: package
+#  image: $CI_DOCKER_IMAGE
+#  variables:
+#    CI_TARGET_ARCHITECTURE: arm64
+#  <<: *build-deb-script
+#  artifacts:
+#    paths:
+#      - output-arm64/
+#    expire_in: 5 minutes
+
+#.test-deb-script: &test-deb-script
+#  script:
+#    - ls -l output-$CI_TARGET_ARCHITECTURE/scion-apps*$CI_TARGET_ARCHITECTURE.deb
+#    # Test installation
+#    - dpkg -i output-$CI_TARGET_ARCHITECTURE/scion-apps*$CI_TARGET_ARCHITECTURE.deb
+#    # Test removal
+#    - dpkg --purge $CI_PACKAGE
+#
+#apps-ubuntu-16.04-amd64-test:
+#  stage: test
+#  image: ubuntu:16.04
+#  variables:
+#    CI_TARGET_ARCHITECTURE: amd64
+#  <<: *test-deb-script

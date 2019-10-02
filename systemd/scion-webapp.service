@@ -1,0 +1,18 @@
+[Unit]
+Description=SCION Web App
+Documentation=https://www.scionlab.org
+After=network-online.target scion-dispatcher.service
+Wants=network-online.target
+PartOf=scionlab.target
+
+[Service]
+Type=simple
+User=scion
+Group=scion
+ExecStart=/usr/bin/scion-webapp -a 0.0.0.0 -sbin /usr/bin/ -sabin /usr/bin/scion/ -r /var/lib/scion/webapp/web/data/ -sgen /etc/scion/gen/ -sgenc /var/lib/scion/ -slogs /var/log/scion/ -srvroot /var/lib/scion/webapp/web/
+RemainAfterExit=False
+KillMode=control-group
+Restart=on-failure
+
+[Install]
+WantedBy=scionlab.target

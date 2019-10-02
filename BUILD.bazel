@@ -1,0 +1,401 @@
+load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_deb", "pkg_tar")
+
+# bazel build //:scion-border-router-debian --workspace_status_command=./tools/bazel-build-env --platforms=@io_bazel_rules_go//go/toolchain:linux_amd64
+# bazel build //:scion-border-router-debian --workspace_status_command=./tools/bazel-build-env --platforms=@io_bazel_rules_go//go/toolchain:linux_arm64
+
+# Variables used to prepare DEB and RPM packages
+PKG_ARCHITECTURE = "CI_TARGET_ARCHITECTURE"
+PKG_HOMEPAGE = "https://www.scion-architecture.net"
+PKG_MAINTAINER = "ETH Zurich, SCIONLab Team <scionlab-admins@sympa.ethz.ch>"
+PKG_PRORITY = "optional"
+PKG_SECTION = "net"
+
+PKG_VERSION_BWTESTER = "CI_PKG_VERSION_BWTESTER"
+PKG_VERSION_CAMERAPP = "CI_PKG_VERSION_CAMERAPP"
+PKG_VERSION_HELLOWORLD = "CI_PKG_VERSION_HELLOWORLD"
+PKG_VERSION_NETCAT = "CI_PKG_VERSION_NETCAT"
+PKG_VERSION_SENSORAPP = "CI_PKG_VERSION_SENSORAPP"
+PKG_VERSION_SSH = "CI_PKG_VERSION_SSH"
+PKG_VERSION_WEBAPP = "CI_PKG_VERSION_WEBAPP"
+
+# SCION Bandwidth Tester
+pkg_tar (
+	name = "bwtester-bin",
+	srcs = [
+		"bin/bwtester/scion-bwtestclient",
+		"bin/bwtester/scion-bwtestserver",
+	],
+	mode = "0755",
+	package_dir = "/usr/bin",
+)
+
+pkg_tar(
+    name = "bwtester-systemd",
+    srcs = [
+        "systemd/scion-bwtestserver.service",
+    ],
+    mode = "0644",
+    package_dir = "/lib/systemd/system",
+)
+
+pkg_tar(
+    name = "bwtester",
+    extension = "tar.gz",
+    deps = [
+        ":bwtester-bin",
+        ":bwtester-systemd",
+    ],
+)
+
+pkg_deb(
+    name = "scion-apps-bwtester",
+    architecture = PKG_ARCHITECTURE,
+    data = ":bwtester",
+    depends = [
+        "scionlab",
+    ],
+    description = "SCION Bandwidth Tester",
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-apps-bwtester",
+    priority = PKG_PRORITY,
+    section = PKG_SECTION,
+    version = PKG_VERSION_BWTESTER,
+)
+
+# SCION Camera App
+pkg_tar (
+	name = "camerapp-bin",
+	srcs = [
+		"bin/camerapp/scion-imagefetcher",
+		"bin/camerapp/scion-imageserver",
+		"bin/camerapp/scion-paparazzi",
+	],
+	mode = "0755",
+	package_dir = "/usr/bin",
+)
+
+pkg_deb(
+    name = "scion-apps-camerapp",
+    architecture = PKG_ARCHITECTURE,
+    data = ":camerapp-bin",
+    depends = [
+      "python3 (>=3.5)",
+      "scionlab",
+    ],
+    description = "SCION Camera App",
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-apps-camerapp",
+    priority = PKG_PRORITY,
+    section = PKG_SECTION,
+    version = PKG_VERSION_BWTESTER,
+)
+
+# SCION Hello World
+pkg_tar (
+	name = "helloworld-bin",
+	srcs = [
+		"bin/helloworld/scion-helloworld",
+	],
+	mode = "0755",
+	package_dir = "/usr/bin",
+)
+
+pkg_deb(
+    name = "scion-apps-helloworld",
+    architecture = PKG_ARCHITECTURE,
+    data = ":helloworld-bin",
+    depends = [
+        "scionlab",
+    ],
+    description = "SCION Hello World",
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-apps-helloworld",
+    priority = PKG_PRORITY,
+    section = PKG_SECTION,
+    version = PKG_VERSION_HELLOWORLD,
+)
+
+# SCION Netcat
+pkg_tar (
+	name = "netcat-bin",
+	srcs = [
+		"bin/netcat/scion-netcat",
+	],
+	mode = "0755",
+	package_dir = "/usr/bin",
+)
+
+pkg_deb(
+    name = "scion-apps-netcat",
+    architecture = PKG_ARCHITECTURE,
+    data = ":netcat-bin",
+    depends = [
+        "scionlab",
+    ],
+    description = "SCION Netcat",
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-apps-netcat",
+    priority = PKG_PRORITY,
+    section = PKG_SECTION,
+    version = PKG_VERSION_NETCAT,
+)
+
+# SCION Sensor App
+pkg_tar (
+	name = "sensorapp-bin",
+	srcs = [
+		"bin/sensorapp/scion-sensorfetcher",
+		"bin/sensorapp/scion-sensorserver",
+		"bin/sensorapp/scion-sensorreader",
+		"bin/sensorapp/scion-timereader",
+	],
+	mode = "0755",
+	package_dir = "/usr/bin",
+)
+
+pkg_deb(
+    name = "scion-apps-sensorapp",
+    architecture = PKG_ARCHITECTURE,
+    data = ":sensorapp-bin",
+    depends = [
+      "python3 (>=3.5)",
+      "scionlab",
+    ],
+    description = "SCION Sensor App",
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-apps-sensorapp",
+    priority = PKG_PRORITY,
+    section = PKG_SECTION,
+    version = PKG_VERSION_SENSORAPP,
+)
+
+# SCION SSH
+pkg_tar (
+	name = "ssh-bin",
+	srcs = [
+		"bin/ssh/scion-ssh-client",
+		"bin/ssh/scion-ssh-server",
+	],
+	mode = "0755",
+	package_dir = "/usr/bin",
+)
+
+pkg_deb(
+    name = "scion-apps-ssh",
+    architecture = PKG_ARCHITECTURE,
+    data = ":ssh-bin",
+    depends = [
+        "scionlab",
+    ],
+    description = "SCION SSH",
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-apps-ssh",
+    priority = PKG_PRORITY,
+    section = PKG_SECTION,
+    version = PKG_VERSION_SSH,
+)
+
+# SCION Webapp
+pkg_tar (
+	name = "webapp-bin",
+	srcs = [
+		"bin/webapp/scion-webapp",
+	],
+	mode = "0755",
+	package_dir = "/usr/bin",
+)
+
+pkg_tar (
+	name = "webapp-bin-symlinks",
+	package_dir = "/usr/bin",
+    symlinks = {
+        "/usr/bin/scion/scmp": "/usr/bin/scmp",
+        "/usr/bin/scion/bwtestclient": "/usr/bin/scion-bwtestclient",
+        "/usr/bin/scion/imagefetcher": "/usr/bin/scion-imagefetcher",
+        "/usr/bin/scion/sensorfetcher": "/usr/bin/scion-sensorfetcher",
+    },
+)
+
+pkg_tar (
+	name = "webapp-web",
+	srcs = [
+		"scion-apps/webapp/web/favicon.ico",
+	],
+	mode = "0644",
+	package_dir = "/var/lib/scion/webapp/web",
+)
+
+pkg_tar (
+	name = "webapp-web-config",
+	srcs = [
+	    "scion-apps/webapp/web/config/servers_default.json",
+    ],
+    mode = "0644",
+    package_dir = "/var/lib/scion/webapp/web/config",
+)
+
+pkg_tar (
+	name = "webapp-web-template",
+	srcs = [
+	    "scion-apps/webapp/web/template/files.html",
+        "scion-apps/webapp/web/template/crt.html",
+        "scion-apps/webapp/web/template/header.html",
+        "scion-apps/webapp/web/template/about.html",
+        "scion-apps/webapp/web/template/trc.html",
+        "scion-apps/webapp/web/template/error.html",
+        "scion-apps/webapp/web/template/index.html",
+        "scion-apps/webapp/web/template/health.html",
+        "scion-apps/webapp/web/template/astopo.html",
+        "scion-apps/webapp/web/template/footer.html",
+    ],
+    mode = "0644",
+    package_dir = "/var/lib/scion/webapp/web/template",
+)
+
+pkg_tar (
+	name = "webapp-web-static-css",
+	srcs = [
+	    "scion-apps/webapp/web/static/css/pretty-checkbox.min.css",
+        "scion-apps/webapp/web/static/css/bootstrap.min.css",
+        "scion-apps/webapp/web/static/css/style-viz.css",
+        "scion-apps/webapp/web/static/css/topology.css",
+        "scion-apps/webapp/web/static/css/style.css",
+        "scion-apps/webapp/web/static/css/animation.css",
+    ],
+    mode = "0644",
+    package_dir = "/var/lib/scion/webapp/web/static/css",
+)
+
+pkg_tar (
+	name = "webapp-web-static-js",
+	srcs = [
+	    "scion-apps/webapp/web/static/js/asviz.js",
+        "scion-apps/webapp/web/static/js/jquery.knob.min.js",
+        "scion-apps/webapp/web/static/js/cola.v3.min.js",
+        "scion-apps/webapp/web/static/js/tab-paths.js",
+        "scion-apps/webapp/web/static/js/location.js",
+        "scion-apps/webapp/web/static/js/topojson.min.js",
+        "scion-apps/webapp/web/static/js/tab-topocola.js",
+        "scion-apps/webapp/web/static/js/jquery-2.2.0.min.js",
+        "scion-apps/webapp/web/static/js/d3.v3.min.js",
+        "scion-apps/webapp/web/static/js/bootstrap.min.js",
+        "scion-apps/webapp/web/static/js/webapp.js",
+        "scion-apps/webapp/web/static/js/tab-g-maps.js",
+        "scion-apps/webapp/web/static/js/topology.js",
+        "scion-apps/webapp/web/static/js/highcharts.js",
+    ],
+    mode = "0644",
+    package_dir = "/var/lib/scion/webapp/web/static/js",
+)
+
+pkg_tar (
+	name = "webapp-web-static-html",
+	srcs = [
+	    "scion-apps/webapp/web/static/html/map.html",
+    ],
+    mode = "0644",
+    package_dir = "/var/lib/scion/webapp/web/static/html",
+)
+
+pkg_tar (
+	name = "webapp-web-static-img",
+	srcs = [
+	    "scion-apps/webapp/web/static/img/lock-locked.svg",
+    ],
+    mode = "0644",
+    package_dir = "/var/lib/scion/webapp/web/static/img",
+)
+
+pkg_tar (
+	name = "webapp-web-tests-health",
+	srcs = [
+	    "scion-apps/webapp/web/tests/health/netcheck.sh",
+        "scion-apps/webapp/web/tests/health/timecheck.sh",
+        "scion-apps/webapp/web/tests/health/testTotalMem.sh",
+        "scion-apps/webapp/web/tests/health/scmpcheck.sh",
+        "scion-apps/webapp/web/tests/health/default.json",
+        "scion-apps/webapp/web/tests/health/beaconstest.sh",
+        "scion-apps/webapp/web/tests/health/testVPN.sh",
+        "scion-apps/webapp/web/tests/health/testAvailDiskSpace.sh",
+        "scion-apps/webapp/web/tests/health/testSCIONRunning.sh",
+    ],
+    mode = "0644",
+    package_dir = "/var/lib/scion/webapp/web/tests/health",
+)
+
+pkg_tar(
+    name = "webapp-systemd",
+    srcs = [
+        "systemd/scion-webapp.service",
+    ],
+    mode = "0644",
+    package_dir = "/lib/systemd/system",
+)
+
+pkg_tar(
+    name = "webapp",
+    extension = "tar.gz",
+    deps = [
+        ":webapp-bin",
+        ":webapp-bin-symlinks",
+        ":webapp-systemd",
+        ":webapp-web",
+        ":webapp-web-config",
+        ":webapp-web-template",
+        ":webapp-web-static-css",
+        ":webapp-web-static-js",
+        ":webapp-web-static-html",
+        ":webapp-web-static-img",
+        ":webapp-web-tests-health",
+    ],
+)
+
+pkg_deb(
+    name = "scion-apps-webapp",
+    architecture = PKG_ARCHITECTURE,
+    data = ":webapp",
+    depends = [
+        "python3 (>=3.5)",
+        "curl",
+        "scionlab",
+    ],
+    description = "SCION Web App",
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-apps-webapp",
+    postinst = "debian/scripts/scion-webapp.postinst",
+    postrm = "debian/scripts/scion-webapp.postrm",
+    priority = PKG_PRORITY,
+    section = PKG_SECTION,
+    version = PKG_VERSION_WEBAPP,
+)
+
+# pkg_deb(
+#     name = "scion-border-router-debian",
+#     architecture = PKG_ARCHITECTURE,
+#     #    conffiles = [
+#     #        "/usr/local/corp/etc/app.flagfile",
+#     #    ],
+#     data = ":scion-border-router",
+#     depends = [
+#         "adduser",
+#         "scion-systemd-wrapper (=" + PKG_VERSION_SCION_SYSTEMD_WRAPPER + ")",
+#     ],
+#     description = "SCION Border Router",
+#     homepage = PKG_HOMEPAGE,
+#     maintainer = PKG_MAINTAINER,
+#     package = "scion-border-router",
+#     preinst = "debian/scripts/scion.preinst",
+#     postinst = "debian/scripts/scion.postinst",
+#     prerm = "debian/scripts/scion.prerm",
+#     postrm = "debian/scripts/scion.postrm",
+#     priority = PKG_PRORITY,
+#     section = PKG_SECTION,
+#     version = PKG_VERSION_SCION_BORDER_ROUTER,
+# )
