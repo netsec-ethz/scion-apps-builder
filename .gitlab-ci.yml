@@ -204,13 +204,39 @@ webapp-amd64:
       - output-amd64/
     expire_in: 30 minutes
 
+.test-deb-script: &test-deb-script
+  script:
+    # Debug
+    - ls -l output-$CI_TARGET_ARCHITECTURE/
+    # Install SCIONLab as a dependency
+    - apt update && apt install -y apt-transport-https ca-certificates
+    - echo "deb [trusted=yes] https://packages.netsec.inf.ethz.ch/debian all main" >> /etc/apt/sources.list && apt update
+    - apt install -y scionlab
+    # Install SCION APPS' dependencies
+    - apt install -y curl
+    # Install SCION APPS packages
+    - dpkg -i output-$CI_TARGET_ARCHITECTURE/*.deb
+
 all-ubuntu-16.04-amd64-test:
   stage: test
   image: ubuntu:16.04
   variables:
     CI_TARGET_ARCHITECTURE: amd64
-  script:
-    - ls -l output-$CI_TARGET_ARCHITECTURE/
+  <<: *test-deb-script
+
+all-ubuntu-18.04-amd64-test:
+  stage: test
+  image: ubuntu:18.04
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+  <<: *test-deb-script
+
+all-debian-10-amd64-test:
+  stage: test
+  image: debian:buster
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+  <<: *test-deb-script
 
 .deb-deploy-script: &deb-deploy-script
   before_script:
