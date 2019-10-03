@@ -22,6 +22,11 @@ connectivity-check:
     - rm -rf /var/lib/apt/lists/* && apt update && apt install -y git wget curl unzip gcc file python
     - curl -fSL "https://dl.google.com/go/go$CI_GOLANG_VERSION.linux-amd64.tar.gz" | tar xzC /usr/local
     - ln -f -s /usr/local/go/bin/* /usr/bin/
+    # Install multiplatform toolchains
+    - apt install -y gcc-multilib
+    - apt install -y libc6-armhf-cross libc6-dev-armhf-cross gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi binutils-arm-linux-gnueabihf binutils-arm-linux-gnueabi
+    - apt install -y libc6-arm64-cross libc6-dev-arm64-cross gcc-aarch64-linux-gnu
+    - apt install -y libc6-i386-cross libc6-dev-i386-cross linux-libc-dev-i386-cross
     # Clone SCION apps source code
     - git clone $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
     - mkdir -p $HOME/go/src/github.com/netsec-ethz/
@@ -37,11 +42,15 @@ connectivity-check:
     - apt install -y govendor capnproto libpam0g-dev
     - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
     - govendor sync -v
-    # Place hash of git repo in the output for auditing
+    # Prepare GO environment
     - export CGO_ENABLED=1
     - export GOOS=linux
     - export CC=$CI_CC && echo $CC
     - export GOARCH=$CI_GOARCH && echo $GOARCH
+    # Create some directories
+    - mkdir -p $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION/bin
+    - mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION/bin
 
 .post-build-script: &post-build-script
   after_script:
@@ -72,137 +81,411 @@ bwtester-amd64:
   image: $CI_DOCKER_IMAGE
   variables:
     CI_TARGET_ARCHITECTURE: amd64
+    CI_GOARCH: amd64
+    CI_CC: gcc
     CI_APP_LOCATION: bwtester
   <<: *build-script
   script:
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
-    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../bwtestclient/
+    - go build ../bwtestclient/
     - mv bwtestclient $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestclient
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../bwtestserver/
+    - go build ../bwtestserver/
     - mv bwtestserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestserver
   <<: *post-build-script
   artifacts:
     paths:
-      - output-amd64/
-    expire_in: 30 minutes
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+bwtester-arm64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: arm64
+    CI_GOARCH: arm64
+    CI_CC: aarch64-linux-gnu-gcc
+    CI_APP_LOCATION: bwtester
+  <<: *build-script
+  script:
+    - go build ../bwtestclient/
+    - mv bwtestclient $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestclient
+    - go build ../bwtestserver/
+    - mv bwtestserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestserver
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+bwtester-armhf:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: armhf
+    CI_GOARCH: arm
+    CI_CC: arm-linux-gnueabihf-gcc
+    CI_APP_LOCATION: bwtester
+  <<: *build-script
+  script:
+    - go build ../bwtestclient/
+    - mv bwtestclient $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestclient
+    - go build ../bwtestserver/
+    - mv bwtestserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestserver
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
 
 camerapp-amd64:
   stage: build
   image: $CI_DOCKER_IMAGE
   variables:
     CI_TARGET_ARCHITECTURE: amd64
+    CI_GOARCH: amd64
+    CI_CC: gcc
     CI_APP_LOCATION: camerapp
   <<: *build-script
   script:
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
-    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../imagefetcher/
+    - go build ../imagefetcher/
     - mv imagefetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imagefetcher
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../imageserver/
+    - go build ../imageserver/
     - mv imageserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imageserver
     - cp ../imageserver/paparazzi.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-paparazzi
   <<: *post-build-script
   artifacts:
     paths:
-      - output-amd64/
-    expire_in: 30 minutes
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+camerapp-arm64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: arm64
+    CI_GOARCH: arm64
+    CI_CC: aarch64-linux-gnu-gcc
+    CI_APP_LOCATION: camerapp
+  <<: *build-script
+  script:
+    - go build ../imagefetcher/
+    - mv imagefetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imagefetcher
+    - go build ../imageserver/
+    - mv imageserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imageserver
+    - cp ../imageserver/paparazzi.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-paparazzi
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+camerapp-armhf:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: armhf
+    CI_GOARCH: arm
+    CI_CC: arm-linux-gnueabihf-gcc
+    CI_APP_LOCATION: camerapp
+  <<: *build-script
+  script:
+    - go build ../imagefetcher/
+    - mv imagefetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imagefetcher
+    - go build ../imageserver/
+    - mv imageserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imageserver
+    - cp ../imageserver/paparazzi.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-paparazzi
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
 
 helloworld-amd64:
   stage: build
   image: $CI_DOCKER_IMAGE
   variables:
     CI_TARGET_ARCHITECTURE: amd64
+    CI_GOARCH: amd64
+    CI_CC: gcc
     CI_APP_LOCATION: helloworld
   <<: *build-script
   script:
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
-    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../
+    - go build ../
     - mv helloworld $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-helloworld
   <<: *post-build-script
   artifacts:
     paths:
-      - output-amd64/
-    expire_in: 30 minutes
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+helloworld-arm64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: arm64
+    CI_GOARCH: arm64
+    CI_CC: aarch64-linux-gnu-gcc
+    CI_APP_LOCATION: helloworld
+  <<: *build-script
+  script:
+    - go build ../
+    - mv helloworld $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-helloworld
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+helloworld-armhf:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: armhf
+    CI_GOARCH: arm
+    CI_CC: arm-linux-gnueabihf-gcc
+    CI_APP_LOCATION: helloworld
+  <<: *build-script
+  script:
+    - go build ../
+    - mv helloworld $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-helloworld
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
 
 netcat-amd64:
   stage: build
   image: $CI_DOCKER_IMAGE
   variables:
     CI_TARGET_ARCHITECTURE: amd64
+    CI_GOARCH: amd64
+    CI_CC: gcc
     CI_APP_LOCATION: netcat
   <<: *build-script
   script:
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
-    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../
+    - go build ../
     - mv netcat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-netcat
   <<: *post-build-script
   artifacts:
     paths:
-      - output-amd64/
-    expire_in: 30 minutes
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+netcat-arm64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: arm64
+    CI_GOARCH: arm64
+    CI_CC: aarch64-linux-gnu-gcc
+    CI_APP_LOCATION: netcat
+  <<: *build-script
+  script:
+    - go build ../
+    - mv netcat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-netcat
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+netcat-armhf:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: armhf
+    CI_GOARCH: arm
+    CI_CC: arm-linux-gnueabihf-gcc
+    CI_APP_LOCATION: netcat
+  <<: *build-script
+  script:
+    - go build ../
+    - mv netcat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-netcat
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
 
 sensorapp-amd64:
   stage: build
   image: $CI_DOCKER_IMAGE
   variables:
     CI_TARGET_ARCHITECTURE: amd64
+    CI_GOARCH: amd64
+    CI_CC: gcc
     CI_APP_LOCATION: sensorapp
   <<: *build-script
   script:
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
-    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../sensorfetcher/
+    - go build ../sensorfetcher/
     - mv sensorfetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorfetcher
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../sensorserver/
+    - go build ../sensorserver/
     - mv sensorserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorserver
     - cp ../sensorserver/sensorreader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorreader
     - cp ../sensorserver/timereader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-timereader
   <<: *post-build-script
   artifacts:
     paths:
-      - output-amd64/
-    expire_in: 30 minutes
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+sensorapp-arm64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: arm64
+    CI_GOARCH: arm64
+    CI_CC: aarch64-linux-gnu-gcc
+    CI_APP_LOCATION: sensorapp
+  <<: *build-script
+  script:
+    - go build ../sensorfetcher/
+    - mv sensorfetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorfetcher
+    - go build ../sensorserver/
+    - mv sensorserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorserver
+    - cp ../sensorserver/sensorreader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorreader
+    - cp ../sensorserver/timereader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-timereader
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+sensorapp-armhf:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: armhf
+    CI_GOARCH: arm
+    CI_CC: arm-linux-gnueabihf-gcc
+    CI_APP_LOCATION: sensorapp
+  <<: *build-script
+  script:
+    - go build ../sensorfetcher/
+    - mv sensorfetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorfetcher
+    - go build ../sensorserver/
+    - mv sensorserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorserver
+    - cp ../sensorserver/sensorreader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorreader
+    - cp ../sensorserver/timereader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-timereader
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
 
 ssh-amd64:
   stage: build
   image: $CI_DOCKER_IMAGE
   variables:
     CI_TARGET_ARCHITECTURE: amd64
+    CI_GOARCH: amd64
+    CI_CC: gcc
     CI_APP_LOCATION: ssh
   <<: *build-script
   script:
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
-    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../client/
+    - go build ../client/
     - mv client $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-client
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../server/
+    - go build ../server/
     - mv server $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-server
   <<: *post-build-script
   artifacts:
     paths:
-      - output-amd64/
-    expire_in: 30 minutes
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+#ssh-arm64:
+#  stage: build
+#  image: $CI_DOCKER_IMAGE
+#  variables:
+#    CI_TARGET_ARCHITECTURE: arm64
+#    CI_GOARCH: arm64
+#    CI_CC: aarch64-linux-gnu-gcc
+#    CI_APP_LOCATION: ssh
+#  <<: *build-script
+#  script:
+#    - go build ../client/
+#    - mv client $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-client
+#    - go build ../server/
+#    - mv server $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-server
+#  <<: *post-build-script
+#  artifacts:
+#    paths:
+#      - output-$CI_TARGET_ARCHITECTURE/
+#    expire_in: 1 hour
+
+#ssh-armhf:
+#  stage: build
+#  image: $CI_DOCKER_IMAGE
+#  variables:
+#    CI_TARGET_ARCHITECTURE: armhf
+#    CI_GOARCH: arm
+#    CI_CC: arm-linux-gnueabihf-gcc
+#    CI_APP_LOCATION: ssh
+#  <<: *build-script
+#  script:
+#    - go build ../client/
+#    - mv client $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-client
+#    - go build ../server/
+#    - mv server $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-server
+#  <<: *post-build-script
+#  artifacts:
+#    paths:
+#      - output-$CI_TARGET_ARCHITECTURE/
+#    expire_in: 1 hour
 
 webapp-amd64:
   stage: build
   image: $CI_DOCKER_IMAGE
   variables:
     CI_TARGET_ARCHITECTURE: amd64
+    CI_GOARCH: amd64
+    CI_CC: gcc
     CI_APP_LOCATION: webapp
   <<: *build-script
   script:
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION
-    - mkdir bin && cd bin && mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
-    - env GOOS=linux GOARCH=$CI_TARGET_ARCHITECTURE go build ../
+    - go build ../
     - mv webapp $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-webapp
   <<: *post-build-script
   artifacts:
     paths:
-      - output-amd64/
-    expire_in: 30 minutes
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+webapp-arm64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: arm64
+    CI_GOARCH: arm64
+    CI_CC: aarch64-linux-gnu-gcc
+    CI_APP_LOCATION: webapp
+  <<: *build-script
+  script:
+    - go build ../
+    - mv webapp $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-webapp
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+webapp-armhf:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: armhf
+    CI_GOARCH: arm
+    CI_CC: arm-linux-gnueabihf-gcc
+    CI_APP_LOCATION: webapp
+  <<: *build-script
+  script:
+    - go build ../
+    - mv webapp $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-webapp
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
 
 .test-deb-script: &test-deb-script
   script:
