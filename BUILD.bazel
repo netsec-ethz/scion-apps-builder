@@ -52,7 +52,8 @@ pkg_deb(
     architecture = PKG_ARCHITECTURE,
     data = ":bwtester",
     depends = [
-        "scionlab",
+        "scion-daemon",
+        "scion-dispatcher",
     ],
     description = "SCION Bandwidth Tester",
     homepage = PKG_HOMEPAGE,
@@ -81,7 +82,8 @@ pkg_deb(
     data = ":camerapp-bin",
     depends = [
       "python3 (>=3.5)",
-      "scionlab",
+      "scion-daemon",
+      "scion-dispatcher",
     ],
     description = "SCION Camera App",
     homepage = PKG_HOMEPAGE,
@@ -107,7 +109,8 @@ pkg_deb(
     architecture = PKG_ARCHITECTURE,
     data = ":helloworld-bin",
     depends = [
-        "scionlab",
+        "scion-daemon",
+        "scion-dispatcher",
     ],
     description = "SCION Hello World",
     homepage = PKG_HOMEPAGE,
@@ -133,7 +136,8 @@ pkg_deb(
     architecture = PKG_ARCHITECTURE,
     data = ":netcat-bin",
     depends = [
-        "scionlab",
+        "scion-daemon",
+        "scion-dispatcher",
     ],
     description = "SCION Netcat",
     homepage = PKG_HOMEPAGE,
@@ -163,7 +167,8 @@ pkg_deb(
     data = ":sensorapp-bin",
     depends = [
       "python3 (>=3.5)",
-      "scionlab",
+      "scion-daemon",
+      "scion-dispatcher",
     ],
     description = "SCION Sensor App",
     homepage = PKG_HOMEPAGE,
@@ -190,7 +195,8 @@ pkg_deb(
     architecture = PKG_ARCHITECTURE,
     data = ":ssh-bin",
     depends = [
-        "scionlab",
+        "scion-daemon",
+        "scion-dispatcher",
     ],
     description = "SCION SSH",
     homepage = PKG_HOMEPAGE,
@@ -363,7 +369,8 @@ pkg_deb(
     depends = [
         "python3 (>=3.5)",
         "curl",
-        "scionlab",
+        "scion-daemon",
+        "scion-dispatcher",
         "scion-apps-bwtester",
         "scion-apps-camerapp",
         "scion-apps-sensorapp",
