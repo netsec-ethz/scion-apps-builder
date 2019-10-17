@@ -12,22 +12,26 @@ connectivity-check:
     - ping github.com -c1
     - nc -vz packages.netsec.inf.ethz.ch 22
 
-.build-script: &build-script
-  before_script:
+govendor-population:
+  stage: pre-build
+  image: $CI_DOCKER_IMAGE
+  # (kmateusz) Using artifacts instead of cache due to the lack of sticky runners and shared cache in our GitLab CI.
+  # That means if by any chance next job hits on a different runner, it will not have access to the cache populated
+  # here and will fail.
+  artifacts:
+    paths:
+      - scion-apps/
+    expire_in: 1 hour
+  script:
     # Prepare operating system
     - date
     - echo "Acquire::By-Hash \"yes\"; " > /etc/apt/apt.conf.d/01byhash
-    - apt update && apt install -y apt-transport-https ca-certificates
-    - cp debian/apt.sources.list /etc/apt/sources.list
-    - rm -rf /var/lib/apt/lists/* && apt update && apt install -y git wget curl unzip gcc file python
+    - apt update && apt install -y git curl govendor
+    # Install golang
     - curl -fSL "https://dl.google.com/go/go$CI_GOLANG_VERSION.linux-amd64.tar.gz" | tar xzC /usr/local
     - ln -f -s /usr/local/go/bin/* /usr/bin/
-    # Install multiplatform toolchains
-    - apt install -y gcc-multilib
-    - apt install -y libc6-armhf-cross libc6-dev-armhf-cross gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi binutils-arm-linux-gnueabihf binutils-arm-linux-gnueabi
-    - apt install -y libc6-arm64-cross libc6-dev-arm64-cross gcc-aarch64-linux-gnu
-    - apt install -y libc6-i386-cross libc6-dev-i386-cross linux-libc-dev-i386-cross
     # Clone SCION apps source code
+    - rm -rf scion-apps
     - git clone $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
     - mkdir -p $HOME/go/src/github.com/netsec-ethz/
     - ln -s $(pwd)/scion-apps /root/go/src/github.com/netsec-ethz/
@@ -35,13 +39,30 @@ connectivity-check:
     - pushd scion-apps
     - if [ ! -z "$(ls ../patches)" ]; then ls -l ../patches; for i in ../patches/*.patch; do git apply $i --verbose; done; fi
     - popd
+    # Grab SCION apps Go dependencies
+    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
+    - govendor sync -v
+
+.build-script: &build-script
+  before_script:
+    # Prepare operating system
+    - date
+    - echo "Acquire::By-Hash \"yes\"; " > /etc/apt/apt.conf.d/01byhash
+    - apt update && apt install -y git wget curl unzip gcc file python
+    - curl -fSL "https://dl.google.com/go/go$CI_GOLANG_VERSION.linux-amd64.tar.gz" | tar xzC /usr/local
+    - ln -f -s /usr/local/go/bin/* /usr/bin/
+    # Install multiplatform toolchains and SCION Apps dependencies
+    - "apt install -y \
+      capnproto libpam0g-dev \
+      libc6-armhf-cross libc6-dev-armhf-cross gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi gcc-7-arm-linux-gnueabi binutils-arm-linux-gnueabihf binutils-arm-linux-gnueabi \
+      libc6-arm64-cross libc6-dev-arm64-cross gcc-aarch64-linux-gnu gcc-7-aarch64-linux-gnu \
+      libc6-i386-cross libc6-dev-i386-cross linux-libc-dev-i386-cross"
     # Install selected release of BAZEL
     - wget https://github.com/bazelbuild/bazel/releases/download/$CI_BAZEL_VERSION/bazel-$CI_BAZEL_VERSION-installer-linux-x86_64.sh -O bazel_install_script.sh
     - bash bazel_install_script.sh
-    # Install SCION apps deps
-    - apt install -y govendor capnproto libpam0g-dev
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
-    - govendor sync -v
+    # Create symlinks for Go
+    - mkdir -p $HOME/go/src/github.com/netsec-ethz/
+    - ln -s $(pwd)/scion-apps /root/go/src/github.com/netsec-ethz/
     # Prepare GO environment
     - export CGO_ENABLED=1
     - export GOOS=linux
@@ -494,18 +515,9 @@ webapp-armhf:
     # Install SCIONLab as a dependency
     - apt update && apt install -y apt-transport-https ca-certificates
     - echo "deb [trusted=yes] https://packages.netsec.inf.ethz.ch/debian all main" >> /etc/apt/sources.list && apt update
-    - apt install -y scionlab
-    # Install SCION APPS' dependencies
-    - apt install -y curl
+    - apt install -y scionlab curl
     # Install SCION APPS packages
     - dpkg -i output-$CI_TARGET_ARCHITECTURE/*.deb
-
-all-ubuntu-16.04-amd64-test:
-  stage: test
-  image: ubuntu:16.04
-  variables:
-    CI_TARGET_ARCHITECTURE: amd64
-  <<: *test-deb-script
 
 all-ubuntu-18.04-amd64-test:
   stage: test
@@ -552,9 +564,3 @@ all-deb-deploy:
 #    # Test removal
 #    - dpkg --purge $CI_PACKAGE
 #
-#apps-ubuntu-16.04-amd64-test:
-#  stage: test
-#  image: ubuntu:16.04
-#  variables:
-#    CI_TARGET_ARCHITECTURE: amd64
-#  <<: *test-deb-script
