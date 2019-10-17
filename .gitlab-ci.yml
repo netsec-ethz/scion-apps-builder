@@ -82,6 +82,7 @@ govendor-population:
     - sed -i "s/CI_PKG_VERSION_CAMERAPP/$PKG_VERSION_CAMERAPP/g" BUILD.bazel
     - sed -i "s/CI_PKG_VERSION_HELLOWORLD/$PKG_VERSION_HELLOWORLD/g" BUILD.bazel
     - sed -i "s/CI_PKG_VERSION_NETCAT/$PKG_VERSION_NETCAT/g" BUILD.bazel
+    - sed -i "s/CI_PKG_VERSION_BAT/$PKG_VERSION_BAT/g" BUILD.bazel
     - sed -i "s/CI_PKG_VERSION_SENSORAPP/$PKG_VERSION_SENSORAPP/g" BUILD.bazel
     - sed -i "s/CI_PKG_VERSION_SSH/$PKG_VERSION_SSH/g" BUILD.bazel
     - sed -i "s/CI_PKG_VERSION_WEBAPP/$PKG_VERSION_WEBAPP/g" BUILD.bazel
@@ -322,6 +323,60 @@ netcat-armhf:
   script:
     - go build ../
     - mv netcat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-netcat
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+bat-amd64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: amd64
+    CI_GOARCH: amd64
+    CI_CC: gcc
+    CI_APP_LOCATION: bat
+  <<: *build-script
+  script:
+    - go build ../
+    - mv bat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bat
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+bat-arm64:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: arm64
+    CI_GOARCH: arm64
+    CI_CC: aarch64-linux-gnu-gcc
+    CI_APP_LOCATION: bat
+  <<: *build-script
+  script:
+    - go build ../
+    - mv bat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bat
+  <<: *post-build-script
+  artifacts:
+    paths:
+      - output-$CI_TARGET_ARCHITECTURE/
+    expire_in: 1 hour
+
+bat-armhf:
+  stage: build
+  image: $CI_DOCKER_IMAGE
+  variables:
+    CI_TARGET_ARCHITECTURE: armhf
+    CI_GOARCH: arm
+    CI_CC: arm-linux-gnueabihf-gcc
+    CI_APP_LOCATION: bat
+  <<: *build-script
+  script:
+    - go build ../
+    - mv bat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bat
   <<: *post-build-script
   artifacts:
     paths:

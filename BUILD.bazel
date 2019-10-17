@@ -14,6 +14,7 @@ PKG_VERSION_BWTESTER = "CI_PKG_VERSION_BWTESTER"
 PKG_VERSION_CAMERAPP = "CI_PKG_VERSION_CAMERAPP"
 PKG_VERSION_HELLOWORLD = "CI_PKG_VERSION_HELLOWORLD"
 PKG_VERSION_NETCAT = "CI_PKG_VERSION_NETCAT"
+PKG_VERSION_BAT = "CI_PKG_VERSION_BAT"
 PKG_VERSION_SENSORAPP = "CI_PKG_VERSION_SENSORAPP"
 PKG_VERSION_SSH = "CI_PKG_VERSION_SSH"
 PKG_VERSION_WEBAPP = "CI_PKG_VERSION_WEBAPP"
@@ -146,6 +147,33 @@ pkg_deb(
     priority = PKG_PRORITY,
     section = PKG_SECTION,
     version = PKG_VERSION_NETCAT,
+)
+
+# SCION bat
+pkg_tar (
+	name = "bat-bin",
+	srcs = [
+		"bin/bat/scion-bat",
+	],
+	mode = "0755",
+	package_dir = "/usr/bin",
+)
+
+pkg_deb(
+    name = "scion-apps-bat",
+    architecture = PKG_ARCHITECTURE,
+    data = ":bat-bin",
+    depends = [
+        "scion-daemon",
+        "scion-dispatcher",
+    ],
+    description = "SCION/QUIC-enabled fork of bat, which is a curl-like tool for interacting with webservers",
+    homepage = PKG_HOMEPAGE,
+    maintainer = PKG_MAINTAINER,
+    package = "scion-apps-bat",
+    priority = PKG_PRORITY,
+    section = PKG_SECTION,
+    version = PKG_VERSION_BAT,
 )
 
 # SCION Sensor App
