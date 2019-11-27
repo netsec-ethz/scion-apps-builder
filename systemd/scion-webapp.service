@@ -13,6 +13,7 @@ ExecStart=/usr/bin/scion-webapp -a 0.0.0.0 -sbin /usr/bin/ -sabin /usr/bin/scion
 RemainAfterExit=False
 KillMode=control-group
 Restart=on-failure
+RestartSec=10
 
 [Install]
 WantedBy=scionlab.target
