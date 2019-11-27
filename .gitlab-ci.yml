@@ -41,7 +41,6 @@ govendor-population:
     - popd
     # Grab SCION apps Go dependencies
     - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
-    - govendor sync -v
 
 .build-script: &build-script
   before_script:
