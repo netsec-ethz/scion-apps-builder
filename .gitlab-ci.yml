@@ -594,11 +594,11 @@ all-debian-10-amd64-test:
     - ssh-add <(echo "$CI_SSH_PRIVATE_KEY")
     - mkdir -p ~/.ssh
     - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
-    - ssh -q $CI_SCP_TARGET "rm -f /tmp/*.deb"
   script:
-    - scp -v output-$CI_DEB_PLATFORM/*.deb $CI_SCP_TARGET:/tmp
-    - export files=$(ssh -q $CI_SCP_TARGET "cd /tmp && ls /tmp/*.deb") && echo $files
-    - for deb in $files; do ssh -q $CI_SCP_TARGET "reprepro -b /home/reprepro/reprepro includedeb $CI_DEB_CODENAME $deb || true"; done
+    - tmpdir=$(ssh -q $CI_SCP_TARGET "mktemp -d --suffix .debs")
+    - scp -v output-$CI_DEB_PLATFORM/*.deb $CI_SCP_TARGET:$tmpdir
+    - ssh -q $CI_SCP_TARGET 'set +x; for deb in ' $tmpdir '/*.deb; do reprepro -b /home/reprepro/reprepro includedeb ' $CI_DEB_CODENAME ' $deb || true; done'
+    - ssh -q $CI_SCP_TARGET 'rm -r ' $tmpdir
 
 all-deb-deploy:
   stage: deploy
