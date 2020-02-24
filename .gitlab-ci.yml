@@ -597,8 +597,8 @@ all-debian-10-amd64-test:
   script:
     - tmpdir=$(ssh -q $CI_SCP_TARGET "mktemp -d --suffix .debs")
     - scp -v output-$CI_DEB_PLATFORM/*.deb $CI_SCP_TARGET:$tmpdir
-    - ssh -q $CI_SCP_TARGET 'set +x; for deb in ' $tmpdir '/*.deb; do reprepro -b /home/reprepro/reprepro includedeb ' $CI_DEB_CODENAME ' $deb || true; done'
-    - ssh -q $CI_SCP_TARGET 'rm -r ' $tmpdir
+    - ssh -q $CI_SCP_TARGET 'set -x; for deb in '$tmpdir'/*.deb; do reprepro -b /home/reprepro/reprepro includedeb '$CI_DEB_CODENAME' $deb || true; done'
+    - ssh -q $CI_SCP_TARGET "rm -r $tmpdir"
 
 all-deb-deploy:
   stage: deploy
