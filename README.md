@@ -10,8 +10,6 @@ CI process relies on some variables defined below. They can be configured using 
 
 * `CI_SCIONAPPS_REPO`
 * `CI_SCIONAPPS_BRANCH`
-* `CI_SCION_REPO`
-* `CI_SCION_BRANCH`
 
 ### Builder configuration
 
