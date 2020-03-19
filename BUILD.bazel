@@ -95,33 +95,6 @@ pkg_deb(
     version = PKG_VERSION_BWTESTER,
 )
 
-# SCION Hello World
-pkg_tar (
-	name = "helloworld-bin",
-	srcs = [
-		"bin/helloworld/scion-helloworld",
-	],
-	mode = "0755",
-	package_dir = "/usr/bin",
-)
-
-pkg_deb(
-    name = "scion-apps-helloworld",
-    architecture = PKG_ARCHITECTURE,
-    data = ":helloworld-bin",
-    depends = [
-        "scion-daemon",
-        "scion-dispatcher",
-    ],
-    description = "SCION Hello World",
-    homepage = PKG_HOMEPAGE,
-    maintainer = PKG_MAINTAINER,
-    package = "scion-apps-helloworld",
-    priority = PKG_PRORITY,
-    section = PKG_SECTION,
-    version = PKG_VERSION_HELLOWORLD,
-)
-
 # SCION Netcat
 pkg_tar (
 	name = "netcat-bin",

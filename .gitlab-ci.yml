@@ -11,66 +11,56 @@ connectivity-check:
   script:
     - ping github.com -c1
     - nc -vz packages.netsec.inf.ethz.ch 22
+    - nc -vz packages-test.netsec.inf.ethz.ch 22
 
-govendor-population:
+clone-repositories:
   stage: pre-build
-  image: $CI_DOCKER_IMAGE
-  # (kmateusz) Using artifacts instead of cache due to the lack of sticky runners and shared cache in our GitLab CI.
-  # That means if by any chance next job hits on a different runner, it will not have access to the cache populated
-  # here and will fail.
+  image: buildpack-deps:bionic-scm
+  retry:
+    max: 2
+    when: runner_system_failure
   artifacts:
     paths:
       - scion-apps/
     expire_in: 1 hour
   script:
-    # Prepare operating system
-    - date
-    - echo "Acquire::By-Hash \"yes\"; " > /etc/apt/apt.conf.d/01byhash
-    - apt update && apt install -y git curl govendor
-    # Install golang
-    - curl -fSL "https://dl.google.com/go/go$CI_GOLANG_VERSION.linux-amd64.tar.gz" | tar xzC /usr/local
-    - ln -f -s /usr/local/go/bin/* /usr/bin/
     # Clone SCION apps source code
-    - rm -rf scion-apps
-    - git clone $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
-    - mkdir -p $HOME/go/src/github.com/netsec-ethz/
-    - ln -s $(pwd)/scion-apps /root/go/src/github.com/netsec-ethz/
+    - git clone --depth=1 $CI_SCIONAPPS_REPO -b $CI_SCIONAPPS_BRANCH scion-apps
+    # Place hashes of git repos in the output for auditing
+    - git -C scion-apps/ log -1
     # Override some files from upstream SCION apps
     - pushd scion-apps
     - if [ ! -z "$(ls ../patches)" ]; then ls -l ../patches; for i in ../patches/*.patch; do git apply $i --verbose; done; fi
     - popd
-    # Grab SCION apps Go dependencies
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps
 
 .build-script: &build-script
   before_script:
     # Prepare operating system
     - date
+    - export DEBIAN_FRONTEND=noninteractive
     - echo "Acquire::By-Hash \"yes\"; " > /etc/apt/apt.conf.d/01byhash
-    - apt update && apt install -y git wget curl unzip gcc file python
+    # Install multiplatform toolchains and SCION Apps dependencies
+    - apt-get update
+    - apt-get install -y
+      capnproto libpam0g-dev
+      libc6-armhf-cross libc6-dev-armhf-cross gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi gcc-7-arm-linux-gnueabi binutils-arm-linux-gnueabihf binutils-arm-linux-gnueabi
+      libc6-arm64-cross libc6-dev-arm64-cross gcc-aarch64-linux-gnu gcc-7-aarch64-linux-gnu
+      libc6-i386-cross libc6-dev-i386-cross linux-libc-dev-i386-cross
+    # Install golang
     - curl -fSL "https://dl.google.com/go/go$CI_GOLANG_VERSION.linux-amd64.tar.gz" | tar xzC /usr/local
     - ln -f -s /usr/local/go/bin/* /usr/bin/
-    # Install multiplatform toolchains and SCION Apps dependencies
-    - "apt install -y \
-      capnproto libpam0g-dev \
-      libc6-armhf-cross libc6-dev-armhf-cross gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi gcc-7-arm-linux-gnueabi binutils-arm-linux-gnueabihf binutils-arm-linux-gnueabi \
-      libc6-arm64-cross libc6-dev-arm64-cross gcc-aarch64-linux-gnu gcc-7-aarch64-linux-gnu \
-      libc6-i386-cross libc6-dev-i386-cross linux-libc-dev-i386-cross"
     # Install selected release of BAZEL
     - wget https://github.com/bazelbuild/bazel/releases/download/$CI_BAZEL_VERSION/bazel-$CI_BAZEL_VERSION-installer-linux-x86_64.sh -O bazel_install_script.sh
     - bash bazel_install_script.sh
-    # Create symlinks for Go
-    - mkdir -p $HOME/go/src/github.com/netsec-ethz/
-    - ln -s $(pwd)/scion-apps /root/go/src/github.com/netsec-ethz/
     # Prepare GO environment
     - export CGO_ENABLED=1
     - export GOOS=linux
     - export CC=$CI_CC && echo $CC
     - export GOARCH=$CI_GOARCH && echo $GOARCH
     # Create some directories
-    - mkdir -p $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION/bin
-    - mkdir -p $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps/$CI_APP_LOCATION/bin
+    - export BIN_DIR=$CI_PROJECT_DIR/bin/$CI_APP_LOCATION
+    - mkdir -p $BIN_DIR
+    - cd scion-apps
 
 .post-build-script: &post-build-script
   after_script:
@@ -85,8 +75,6 @@ govendor-population:
     - sed -i "s/CI_PKG_VERSION_SENSORAPP/$PKG_VERSION_SENSORAPP/g" BUILD.bazel
     - sed -i "s/CI_PKG_VERSION_SSH/$PKG_VERSION_SSH/g" BUILD.bazel
     - sed -i "s/CI_PKG_VERSION_WEBAPP/$PKG_VERSION_WEBAPP/g" BUILD.bazel
-    # Prepare BIN directory for Bazel
-    - mv bin-$CI_TARGET_ARCHITECTURE bin
     # Build APP package
     - bazel build //:scion-apps-$CI_APP_LOCATION
     # Prepare packages to shipment
@@ -94,12 +82,10 @@ govendor-population:
     - cp bazel-bin/*_$CI_TARGET_ARCHITECTURE.deb output-$CI_TARGET_ARCHITECTURE
     # Debug
     - ls -lh output-$CI_TARGET_ARCHITECTURE
-    # Place hash of git repo in the output for auditing
-    - cd $HOME/go/src/github.com/netsec-ethz/scion-apps && git log -1
 
 bwtester-amd64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: amd64
     CI_GOARCH: amd64
@@ -107,10 +93,8 @@ bwtester-amd64:
     CI_APP_LOCATION: bwtester
   <<: *build-script
   script:
-    - go build ../bwtestclient/
-    - mv bwtestclient $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestclient
-    - go build ../bwtestserver/
-    - mv bwtestserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestserver
+    - go build -o $BIN_DIR/scion-bwtestclient ./bwtester/bwtestclient/
+    - go build -o $BIN_DIR/scion-bwtestserver ./bwtester/bwtestserver/
   <<: *post-build-script
   artifacts:
     paths:
@@ -119,7 +103,7 @@ bwtester-amd64:
 
 bwtester-arm64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: arm64
     CI_GOARCH: arm64
@@ -127,10 +111,8 @@ bwtester-arm64:
     CI_APP_LOCATION: bwtester
   <<: *build-script
   script:
-    - go build ../bwtestclient/
-    - mv bwtestclient $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestclient
-    - go build ../bwtestserver/
-    - mv bwtestserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestserver
+    - go build -o $BIN_DIR/scion-bwtestclient ./bwtester/bwtestclient/
+    - go build -o $BIN_DIR/scion-bwtestserver ./bwtester/bwtestserver/
   <<: *post-build-script
   artifacts:
     paths:
@@ -139,7 +121,7 @@ bwtester-arm64:
 
 bwtester-armhf:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: armhf
     CI_GOARCH: arm
@@ -147,10 +129,8 @@ bwtester-armhf:
     CI_APP_LOCATION: bwtester
   <<: *build-script
   script:
-    - go build ../bwtestclient/
-    - mv bwtestclient $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestclient
-    - go build ../bwtestserver/
-    - mv bwtestserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bwtestserver
+    - go build -o $BIN_DIR/scion-bwtestclient ./bwtester/bwtestclient/
+    - go build -o $BIN_DIR/scion-bwtestserver ./bwtester/bwtestserver/
   <<: *post-build-script
   artifacts:
     paths:
@@ -159,7 +139,7 @@ bwtester-armhf:
 
 camerapp-amd64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: amd64
     CI_GOARCH: amd64
@@ -167,11 +147,9 @@ camerapp-amd64:
     CI_APP_LOCATION: camerapp
   <<: *build-script
   script:
-    - go build ../imagefetcher/
-    - mv imagefetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imagefetcher
-    - go build ../imageserver/
-    - mv imageserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imageserver
-    - cp ../imageserver/paparazzi.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-paparazzi
+    - go build -o $BIN_DIR/scion-imagefetcher ./camerapp/imagefetcher/
+    - go build -o $BIN_DIR/scion-imageserver ./camerapp/imageserver/
+    - cp camerapp/imageserver/paparazzi.py $BIN_DIR/scion-paparazzi
   <<: *post-build-script
   artifacts:
     paths:
@@ -180,7 +158,7 @@ camerapp-amd64:
 
 camerapp-arm64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: arm64
     CI_GOARCH: arm64
@@ -188,11 +166,9 @@ camerapp-arm64:
     CI_APP_LOCATION: camerapp
   <<: *build-script
   script:
-    - go build ../imagefetcher/
-    - mv imagefetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imagefetcher
-    - go build ../imageserver/
-    - mv imageserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imageserver
-    - cp ../imageserver/paparazzi.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-paparazzi
+    - go build -o $BIN_DIR/scion-imagefetcher ./camerapp/imagefetcher/
+    - go build -o $BIN_DIR/scion-imageserver ./camerapp/imageserver/
+    - cp camerapp/imageserver/paparazzi.py $BIN_DIR/scion-paparazzi
   <<: *post-build-script
   artifacts:
     paths:
@@ -201,7 +177,7 @@ camerapp-arm64:
 
 camerapp-armhf:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: armhf
     CI_GOARCH: arm
@@ -209,65 +185,9 @@ camerapp-armhf:
     CI_APP_LOCATION: camerapp
   <<: *build-script
   script:
-    - go build ../imagefetcher/
-    - mv imagefetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imagefetcher
-    - go build ../imageserver/
-    - mv imageserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-imageserver
-    - cp ../imageserver/paparazzi.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-paparazzi
-  <<: *post-build-script
-  artifacts:
-    paths:
-      - output-$CI_TARGET_ARCHITECTURE/
-    expire_in: 1 hour
-
-helloworld-amd64:
-  stage: build
-  image: $CI_DOCKER_IMAGE
-  variables:
-    CI_TARGET_ARCHITECTURE: amd64
-    CI_GOARCH: amd64
-    CI_CC: gcc
-    CI_APP_LOCATION: helloworld
-  <<: *build-script
-  script:
-    - go build ../
-    - mv helloworld $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-helloworld
-  <<: *post-build-script
-  artifacts:
-    paths:
-      - output-$CI_TARGET_ARCHITECTURE/
-    expire_in: 1 hour
-
-helloworld-arm64:
-  stage: build
-  image: $CI_DOCKER_IMAGE
-  variables:
-    CI_TARGET_ARCHITECTURE: arm64
-    CI_GOARCH: arm64
-    CI_CC: aarch64-linux-gnu-gcc
-    CI_APP_LOCATION: helloworld
-  <<: *build-script
-  script:
-    - go build ../
-    - mv helloworld $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-helloworld
-  <<: *post-build-script
-  artifacts:
-    paths:
-      - output-$CI_TARGET_ARCHITECTURE/
-    expire_in: 1 hour
-
-helloworld-armhf:
-  stage: build
-  image: $CI_DOCKER_IMAGE
-  variables:
-    CI_TARGET_ARCHITECTURE: armhf
-    CI_GOARCH: arm
-    CI_CC: arm-linux-gnueabihf-gcc
-    CI_APP_LOCATION: helloworld
-  <<: *build-script
-  script:
-    - go build ../
-    - mv helloworld $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-helloworld
+    - go build -o $BIN_DIR/scion-imagefetcher ./camerapp/imagefetcher/
+    - go build -o $BIN_DIR/scion-imageserver ./camerapp/imageserver/
+    - cp camerapp/imageserver/paparazzi.py $BIN_DIR/scion-paparazzi
   <<: *post-build-script
   artifacts:
     paths:
@@ -276,7 +196,7 @@ helloworld-armhf:
 
 netcat-amd64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: amd64
     CI_GOARCH: amd64
@@ -284,8 +204,7 @@ netcat-amd64:
     CI_APP_LOCATION: netcat
   <<: *build-script
   script:
-    - go build ../
-    - mv netcat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-netcat
+    - go build -o $BIN_DIR/scion-netcat ./netcat/
   <<: *post-build-script
   artifacts:
     paths:
@@ -294,7 +213,7 @@ netcat-amd64:
 
 netcat-arm64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: arm64
     CI_GOARCH: arm64
@@ -302,8 +221,7 @@ netcat-arm64:
     CI_APP_LOCATION: netcat
   <<: *build-script
   script:
-    - go build ../
-    - mv netcat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-netcat
+    - go build -o $BIN_DIR/scion-netcat ./netcat/
   <<: *post-build-script
   artifacts:
     paths:
@@ -312,7 +230,7 @@ netcat-arm64:
 
 netcat-armhf:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: armhf
     CI_GOARCH: arm
@@ -320,8 +238,7 @@ netcat-armhf:
     CI_APP_LOCATION: netcat
   <<: *build-script
   script:
-    - go build ../
-    - mv netcat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-netcat
+    - go build -o $BIN_DIR/scion-netcat ./netcat/
   <<: *post-build-script
   artifacts:
     paths:
@@ -330,7 +247,7 @@ netcat-armhf:
 
 bat-amd64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: amd64
     CI_GOARCH: amd64
@@ -338,8 +255,7 @@ bat-amd64:
     CI_APP_LOCATION: bat
   <<: *build-script
   script:
-    - go build ../
-    - mv bat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bat
+    - go build -o $BIN_DIR/scion-netcat ./bat/
   <<: *post-build-script
   artifacts:
     paths:
@@ -348,7 +264,7 @@ bat-amd64:
 
 bat-arm64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: arm64
     CI_GOARCH: arm64
@@ -356,8 +272,7 @@ bat-arm64:
     CI_APP_LOCATION: bat
   <<: *build-script
   script:
-    - go build ../
-    - mv bat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bat
+    - go build -o $BIN_DIR/scion-netcat ./bat/
   <<: *post-build-script
   artifacts:
     paths:
@@ -366,7 +281,7 @@ bat-arm64:
 
 bat-armhf:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: armhf
     CI_GOARCH: arm
@@ -374,8 +289,7 @@ bat-armhf:
     CI_APP_LOCATION: bat
   <<: *build-script
   script:
-    - go build ../
-    - mv bat $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-bat
+    - go build -o $BIN_DIR/scion-netcat ./bat/
   <<: *post-build-script
   artifacts:
     paths:
@@ -384,7 +298,7 @@ bat-armhf:
 
 sensorapp-amd64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: amd64
     CI_GOARCH: amd64
@@ -392,12 +306,10 @@ sensorapp-amd64:
     CI_APP_LOCATION: sensorapp
   <<: *build-script
   script:
-    - go build ../sensorfetcher/
-    - mv sensorfetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorfetcher
-    - go build ../sensorserver/
-    - mv sensorserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorserver
-    - cp ../sensorserver/sensorreader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorreader
-    - cp ../sensorserver/timereader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-timereader
+    - go build -o $BIN_DIR/scion-sensorfetcher ./sensorapp/sensorfetcher/
+    - go build -o $BIN_DIR/scion-sensorserver ./sensorapp/sensorserver/
+    - cp sensorapp/sensorserver/sensorreader.py $BIN_DIR/scion-sensorreader
+    - cp sensorapp/sensorserver/timereader.py $BIN_DIR/scion-timereader
   <<: *post-build-script
   artifacts:
     paths:
@@ -406,7 +318,7 @@ sensorapp-amd64:
 
 sensorapp-arm64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: arm64
     CI_GOARCH: arm64
@@ -414,12 +326,10 @@ sensorapp-arm64:
     CI_APP_LOCATION: sensorapp
   <<: *build-script
   script:
-    - go build ../sensorfetcher/
-    - mv sensorfetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorfetcher
-    - go build ../sensorserver/
-    - mv sensorserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorserver
-    - cp ../sensorserver/sensorreader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorreader
-    - cp ../sensorserver/timereader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-timereader
+    - go build -o $BIN_DIR/scion-sensorfetcher ./sensorapp/sensorfetcher/
+    - go build -o $BIN_DIR/scion-sensorserver ./sensorapp/sensorserver/
+    - cp sensorapp/sensorserver/sensorreader.py $BIN_DIR/scion-sensorreader
+    - cp sensorapp/sensorserver/timereader.py $BIN_DIR/scion-timereader
   <<: *post-build-script
   artifacts:
     paths:
@@ -428,7 +338,7 @@ sensorapp-arm64:
 
 sensorapp-armhf:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: armhf
     CI_GOARCH: arm
@@ -436,12 +346,10 @@ sensorapp-armhf:
     CI_APP_LOCATION: sensorapp
   <<: *build-script
   script:
-    - go build ../sensorfetcher/
-    - mv sensorfetcher $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorfetcher
-    - go build ../sensorserver/
-    - mv sensorserver $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorserver
-    - cp ../sensorserver/sensorreader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-sensorreader
-    - cp ../sensorserver/timereader.py $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-timereader
+    - go build -o $BIN_DIR/scion-sensorfetcher ./sensorapp/sensorfetcher/
+    - go build -o $BIN_DIR/scion-sensorserver ./sensorapp/sensorserver/
+    - cp sensorapp/sensorserver/sensorreader.py $BIN_DIR/scion-sensorreader
+    - cp sensorapp/sensorserver/timereader.py $BIN_DIR/scion-timereader
   <<: *post-build-script
   artifacts:
     paths:
@@ -450,7 +358,7 @@ sensorapp-armhf:
 
 ssh-amd64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: amd64
     CI_GOARCH: amd64
@@ -458,10 +366,8 @@ ssh-amd64:
     CI_APP_LOCATION: ssh
   <<: *build-script
   script:
-    - go build ../client/
-    - mv client $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-client
-    - go build ../server/
-    - mv server $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-server
+    - go build -o $BIN_DIR/scion-ssh-client ./ssh/client/
+    - go build -o $BIN_DIR/scion-ssh-server ./ssh/server/
   <<: *post-build-script
   artifacts:
     paths:
@@ -470,7 +376,7 @@ ssh-amd64:
 
 #ssh-arm64:
 #  stage: build
-#  image: $CI_DOCKER_IMAGE
+#  image: buildpack-deps:bionic
 #  variables:
 #    CI_TARGET_ARCHITECTURE: arm64
 #    CI_GOARCH: arm64
@@ -478,10 +384,8 @@ ssh-amd64:
 #    CI_APP_LOCATION: ssh
 #  <<: *build-script
 #  script:
-#    - go build ../client/
-#    - mv client $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-client
-#    - go build ../server/
-#    - mv server $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-server
+#    - go build -o $BIN_DIR/scion-ssh-client ./ssh/client/
+#    - go build -o $BIN_DIR/scion-ssh-server ./ssh/server/
 #  <<: *post-build-script
 #  artifacts:
 #    paths:
@@ -490,7 +394,7 @@ ssh-amd64:
 
 #ssh-armhf:
 #  stage: build
-#  image: $CI_DOCKER_IMAGE
+#  image: buildpack-deps:bionic
 #  variables:
 #    CI_TARGET_ARCHITECTURE: armhf
 #    CI_GOARCH: arm
@@ -498,10 +402,8 @@ ssh-amd64:
 #    CI_APP_LOCATION: ssh
 #  <<: *build-script
 #  script:
-#    - go build ../client/
-#    - mv client $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-client
-#    - go build ../server/
-#    - mv server $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-ssh-server
+#    - go build -o $BIN_DIR/scion-ssh-client ./ssh/client/
+#    - go build -o $BIN_DIR/scion-ssh-server ./ssh/server/
 #  <<: *post-build-script
 #  artifacts:
 #    paths:
@@ -510,7 +412,7 @@ ssh-amd64:
 
 webapp-amd64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: amd64
     CI_GOARCH: amd64
@@ -518,8 +420,7 @@ webapp-amd64:
     CI_APP_LOCATION: webapp
   <<: *build-script
   script:
-    - go build ../
-    - mv webapp $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-webapp
+    - go build -o $BIN_DIR/scion-webapp ./webapp/
   <<: *post-build-script
   artifacts:
     paths:
@@ -528,7 +429,7 @@ webapp-amd64:
 
 webapp-arm64:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: arm64
     CI_GOARCH: arm64
@@ -536,8 +437,7 @@ webapp-arm64:
     CI_APP_LOCATION: webapp
   <<: *build-script
   script:
-    - go build ../
-    - mv webapp $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-webapp
+    - go build -o $BIN_DIR/scion-webapp ./webapp/
   <<: *post-build-script
   artifacts:
     paths:
@@ -546,7 +446,7 @@ webapp-arm64:
 
 webapp-armhf:
   stage: build
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   variables:
     CI_TARGET_ARCHITECTURE: armhf
     CI_GOARCH: arm
@@ -554,8 +454,7 @@ webapp-armhf:
     CI_APP_LOCATION: webapp
   <<: *build-script
   script:
-    - go build ../
-    - mv webapp $CI_PROJECT_DIR/bin-$CI_TARGET_ARCHITECTURE/$CI_APP_LOCATION/scion-webapp
+    - go build -o $BIN_DIR/scion-webapp ./webapp/
   <<: *post-build-script
   artifacts:
     paths:
@@ -588,6 +487,9 @@ all-debian-10-amd64-test:
   <<: *test-deb-script
 
 .deb-deploy-script: &deb-deploy-script
+  retry:
+    max: 2
+    when: runner_system_failure
   before_script:
     - 'which ssh-agent || ( apt update && apt-get install -qq openssh-client )'
     - eval $(ssh-agent -s)
@@ -595,26 +497,47 @@ all-debian-10-amd64-test:
     - mkdir -p ~/.ssh
     - '[[ -f /.dockerenv ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config'
   script:
-    - tmpdir=$(ssh -q $CI_SCP_TARGET "mktemp -d --suffix .debs")
-    - scp -v output-$CI_DEB_PLATFORM/*.deb $CI_SCP_TARGET:$tmpdir
-    - ssh -q $CI_SCP_TARGET 'set -x; for deb in '$tmpdir'/*.deb; do reprepro -b /home/reprepro/reprepro includedeb '$CI_DEB_CODENAME' $deb || true; done'
-    - ssh -q $CI_SCP_TARGET "rm -r $tmpdir"
+    #
+    # Copy (only) new versions of .debs to package repomachine and include them into the repository
+    # We skip existing versions of .debs because reprepro will complain loudly
+    # if the hashes don't match and our builds don't seem be reproducible enough.
+    #
+    # Note: the dance with only copying the new versions looks like a pointless optimisation;
+    #       this could also be done entirely on the repo machine, but simply
+    #       the shell escaping gets (even more) hairy.
+    - repo_ssh_target=reprepro@$CI_PACKAGE_REPO
+    - tmpdir=$(ssh -q $repo_ssh_target "mktemp -d --suffix .debs")
+    - existing_debs=$(ssh -q $repo_ssh_target reprepro -b /home/reprepro/reprepro --list-format \''${$basename}\n'\' list all)
+    - debs_to_deploy=$(ls output-*/*.deb | grep -vF "$existing_debs" || true)
+    - debs_to_skip=$(ls output-*/*.deb | grep -F "$existing_debs" || true)
+    - if [ -n "$debs_to_skip" ]; then
+    -   echo "Skipping existing *.deb:"
+    -   echo "$debs_to_skip"
+    - fi
+    - if [ -n "$debs_to_deploy" ]; then
+    -   scp -v $debs_to_deploy $repo_ssh_target:$tmpdir
+    -   ssh -q $repo_ssh_target 'set -x; for deb in '$tmpdir'/*.deb; do reprepro -b /home/reprepro/reprepro includedeb all $deb; done'
+    -   ssh -q $repo_ssh_target 'rm -r ' $tmpdir
+    - fi
 
-all-deb-deploy:
+all-deb-staging-deploy:
   stage: deploy
-  image: $CI_DOCKER_IMAGE
+  image: buildpack-deps:bionic
   only:
-    - master
+    - /^staging.*$/
+  except:
+    - triggers
   variables:
-    CI_DEB_CODENAME: all
-    CI_DEB_PLATFORM: "*"
+    CI_PACKAGE_REPO: packages-test.netsec.inf.ethz.ch
   <<: *deb-deploy-script
 
-#.test-deb-script: &test-deb-script
-#  script:
-#    - ls -l output-$CI_TARGET_ARCHITECTURE/scion-apps*$CI_TARGET_ARCHITECTURE.deb
-#    # Test installation
-#    - dpkg -i output-$CI_TARGET_ARCHITECTURE/scion-apps*$CI_TARGET_ARCHITECTURE.deb
-#    # Test removal
-#    - dpkg --purge $CI_PACKAGE
-#
+all-deb-prod-deploy:
+  stage: deploy
+  image: buildpack-deps:bionic
+  only:
+    - master
+  except:
+    - triggers
+  variables:
+    CI_PACKAGE_REPO: packages.netsec.inf.ethz.ch
+  <<: *deb-deploy-script
