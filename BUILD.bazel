@@ -386,27 +386,3 @@ pkg_deb(
     section = PKG_SECTION,
     version = PKG_VERSION_WEBAPP,
 )
-
-# pkg_deb(
-#     name = "scion-border-router-debian",
-#     architecture = PKG_ARCHITECTURE,
-#     #    conffiles = [
-#     #        "/usr/local/corp/etc/app.flagfile",
-#     #    ],
-#     data = ":scion-border-router",
-#     depends = [
-#         "adduser",
-#         "scion-systemd-wrapper (=" + PKG_VERSION_SCION_SYSTEMD_WRAPPER + ")",
-#     ],
-#     description = "SCION Border Router",
-#     homepage = PKG_HOMEPAGE,
-#     maintainer = PKG_MAINTAINER,
-#     package = "scion-border-router",
-#     preinst = "debian/scripts/scion.preinst",
-#     postinst = "debian/scripts/scion.postinst",
-#     prerm = "debian/scripts/scion.prerm",
-#     postrm = "debian/scripts/scion.postrm",
-#     priority = PKG_PRORITY,
-#     section = PKG_SECTION,
-#     version = PKG_VERSION_SCION_BORDER_ROUTER,
-# )
