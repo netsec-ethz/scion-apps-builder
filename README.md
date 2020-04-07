@@ -6,22 +6,9 @@ Scripts and tools to build SCION apps
 
 CI process relies on some variables defined below. They can be configured using `Settings / CICD / Environment variables`.
 
-### Upstream repositories
-
-* `CI_SCIONAPPS_REPO`
-* `CI_SCIONAPPS_BRANCH`
-
-### Builder configuration
-
-* `CI_DOCKER_IMAGE`
-* `CI_BAZEL_VERSION`
-* `CI_GOLANG_VERSION`
-
 ### DEB repository configuration
 
-* `CI_SCP_TARGET`
 * `CI_SSH_PRIVATE_KEY`
-* `CI_DEB_CODENAME`
 
 ## Usage
 
